@@ -20,14 +20,35 @@ APP_SETTINGS = {
     "max_events_per_page": 6,
 }
 
-CEO_EMAIL = os.environ.get("CEO_EMAIL", "")
-CEO_PASSWORD = os.environ.get("CEO_PASSWORD", "")
+
+def _ceo_email() -> str:
+    # Read at call-time, not import-time. If this module gets imported
+    # before bootstrap.py has populated os.environ (e.g. via Streamlit
+    # Cloud secrets), a module-level constant would freeze as "" forever
+    # for the life of the process — this avoids that entirely.
+    return os.environ.get("CEO_EMAIL", "")
+
+
+def _ceo_password() -> str:
+    return os.environ.get("CEO_PASSWORD", "")
 
 
 def verify_ceo_login(email: str, password: str) -> bool:
-    if not CEO_EMAIL or not CEO_PASSWORD:
+    expected_email = _ceo_email().strip()
+    expected_password = _ceo_password().strip()
+    if not expected_email or not expected_password:
         return False
     return (
-        email.strip().lower() == CEO_EMAIL.strip().lower()
-        and password == CEO_PASSWORD
+        email.strip().lower() == expected_email.lower()
+        and password.strip() == expected_password
     )
+
+
+def is_ceo_email(email: str) -> bool:
+    """Used by signup to block someone from registering a parent
+    account with the same email as the CEO login — that email is
+    reserved for the env-var-based CEO sign-in only."""
+    expected_email = _ceo_email().strip().lower()
+    if not expected_email:
+        return False
+    return email.strip().lower() == expected_email

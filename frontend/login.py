@@ -1,6 +1,9 @@
 """
-Login page: parent signup/login (email + 6-digit verification) and a
-separate CEO sign-in tab, gated by env-var credentials only.
+Login page: a single Sign In form for everyone. The email/password
+entered is checked against the CEO env-var credentials first (a
+local, no-network comparison); if that doesn't match, it falls
+through to normal parent login against Supabase Auth. Signup (with
+6-digit email verification) lives in its own tab.
 """
 import streamlit as st
 
@@ -160,7 +163,7 @@ def render_login() -> None:
         unsafe_allow_html=True,
     )
 
-    tab_login, tab_signup, tab_ceo = st.tabs(["Sign In", "Create Account", "CEO Access"])
+    tab_login, tab_signup = st.tabs(["Sign In", "Create Account"])
 
     with tab_login:
         if st.session_state.get("reset_mode"):
@@ -171,18 +174,30 @@ def render_login() -> None:
                 password = st.text_input("Password", type="password")
                 submitted = st.form_submit_button("Sign In", use_container_width=True)
                 if submitted:
-                    try:
-                        profile = auth.login(email, password)
+                    if not email.strip() or not password:
+                        st.error("Enter both email and password.")
+                    elif verify_ceo_login(email, password):
+                        # CEO check happens first and is purely local
+                        # (env-var comparison, no network call), so a
+                        # correct CEO login never touches Supabase at
+                        # all and can't collide with parent_profiles.
                         st.session_state.authenticated = True
-                        st.session_state.role = "parent"
-                        st.session_state.profile = profile
-                        st.session_state.shard_id = profile["_shard_id"]
-                        st.session_state.active_page = "Profile"
+                        st.session_state.role = "ceo"
+                        st.session_state.active_page = "Chat"
                         _rerun()
-                    except auth.AuthError as exc:
-                        st.error(str(exc))
-                    except Exception:
-                        st.error("Couldn't sign in right now. Please try again.")
+                    else:
+                        try:
+                            profile = auth.login(email, password)
+                            st.session_state.authenticated = True
+                            st.session_state.role = "parent"
+                            st.session_state.profile = profile
+                            st.session_state.shard_id = profile["_shard_id"]
+                            st.session_state.active_page = "Profile"
+                            _rerun()
+                        except auth.AuthError as exc:
+                            st.error(str(exc))
+                        except Exception:
+                            st.error("Couldn't sign in right now. Please try again.")
 
             if st.button("Forgot your password?"):
                 st.session_state.reset_mode = True
@@ -190,17 +205,3 @@ def render_login() -> None:
 
     with tab_signup:
         _render_signup()
-
-    with tab_ceo:
-        with st.form("ceo_login_form"):
-            ceo_email = st.text_input("CEO email")
-            ceo_password = st.text_input("CEO password", type="password")
-            submitted = st.form_submit_button("Sign in as CEO", use_container_width=True)
-            if submitted:
-                if verify_ceo_login(ceo_email, ceo_password):
-                    st.session_state.authenticated = True
-                    st.session_state.role = "ceo"
-                    st.session_state.active_page = "Chat"
-                    _rerun()
-                else:
-                    st.error("Invalid CEO credentials.")

@@ -19,6 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 from config.age_bands import age_band_for_birth_year, check_security_answer, SECURITY_QUESTIONS
 from config.avatars import default_avatar_key
+from config.ceo_settings import is_ceo_email
 from core.supabase_clients import (
     get_shard_client,
     pick_shard_for_new_signup,
@@ -49,6 +50,8 @@ def request_signup_code(email: str) -> None:
     email = email.strip().lower()
     if not email or "@" not in email:
         raise AuthError("Enter a valid email address.")
+    if is_ceo_email(email):
+        raise AuthError("That email address is reserved. Please use a different one.")
 
     shard_id = pick_shard_for_new_signup()
     client = get_shard_client(shard_id, use_service_role=True)

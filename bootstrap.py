@@ -35,14 +35,27 @@ def _load_dotenv(path: str = ".env") -> None:
 def _load_streamlit_secrets() -> None:
     try:
         import streamlit as st
-        for key, value in st.secrets.items():
-            if isinstance(value, str) and key not in os.environ:
-                os.environ[key] = value
+    except ImportError:
+        return  # not running inside Streamlit at all (e.g. a standalone script)
+
+    try:
+        secrets = st.secrets
     except Exception:
-        # st.secrets raises if no secrets.toml exists at all (e.g.
-        # fresh local clone with only a .env file) — that's fine,
-        # just skip silently.
-        pass
+        # No secrets.toml configured at all — totally normal for local
+        # dev that only uses .env. Nothing to do.
+        return
+
+    for key, value in secrets.items():
+        if isinstance(value, str):
+            os.environ[key] = value
+        elif hasattr(value, "items"):
+            # Value pasted under a [section] heading instead of flat at
+            # the top level — flatten one level so SHARD_1_SUPABASE_URL
+            # still resolves even if someone organized secrets.toml with
+            # headers like [shard_1].
+            for sub_key, sub_value in value.items():
+                if isinstance(sub_value, str):
+                    os.environ[sub_key] = sub_value
 
 
 def bootstrap_env() -> None:
