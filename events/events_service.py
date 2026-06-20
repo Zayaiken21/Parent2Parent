@@ -62,6 +62,8 @@ def create_event(
     event_date: str,
     event_time: str | None = None,
     audience_age_bands: list[str] | None = None,
+    image_url: str | None = None,
+    source_url: str | None = None,
 ) -> dict:
     client = get_shard_client(shard_id, use_service_role=True)
     resp = client.table("events").insert({
@@ -70,8 +72,41 @@ def create_event(
         "event_date": event_date,
         "event_time": event_time,
         "audience_age_bands": audience_age_bands or None,
+        "image_url": (image_url or "").strip() or None,
+        "source_url": (source_url or "").strip() or None,
     }).execute()
     return (resp.data or [{}])[0]
+
+
+def update_event(shard_id: str, event_id: int, **fields) -> dict:
+    """Partial update — pass only the fields you want to change."""
+    client = get_shard_client(shard_id, use_service_role=True)
+    resp = client.table("events").update(fields).eq("id", event_id).execute()
+    return (resp.data or [{}])[0]
+
+
+def delete_event(shard_id: str, event_id: int) -> None:
+    client = get_shard_client(shard_id, use_service_role=True)
+    client.table("events").delete().eq("id", event_id).execute()
+
+
+def list_all_upcoming_events(shard_id: str, limit: int = 200) -> list[dict]:
+    """Unfiltered, unwindowed list — used by the CEO's calendar view so
+    they can see/manage everything at once rather than paging by
+    3-month windows (that windowing is a parent-facing UX choice, not
+    a CEO management constraint).
+    """
+    client = get_shard_client(shard_id, use_service_role=True)
+    today = date.today().isoformat()
+    resp = (
+        client.table("events")
+        .select("*")
+        .gte("event_date", today)
+        .order("event_date")
+        .limit(limit)
+        .execute()
+    )
+    return resp.data or []
 
 
 def send_digest_to_opted_in_users(shard_id: str, window_offset: int = 0) -> int:
