@@ -1,0 +1,39 @@
+# Parent2Parent — blocked terms list
+# Format: category: term
+# Lines starting with # are ignored.
+#
+# This file is intentionally only LIGHTLY seeded. You (the app owner)
+# should expand each category with the specific words/phrases you
+# want caught, including common misspellings — that's a judgment call
+# for your community and isn't something to ship hardcoded in app
+# code. Categories map directly to what the CEO sees in the
+# moderation queue, so keep using these same category names:
+#   profanity        - general cursing
+#   explicit_sexual   - sexual content
+#   harassment        - targeted insults/threats at other users
+#   self_harm_risk    - language suggesting self-harm (route to a
+#                        human fast, don't just silently block)
+#
+# Tip: keep terms lowercase, single words or short phrases work best.
+# The filter already normalizes case, basic leetspeak (4=a, 3=e, etc)
+# and collapses spacing tricks, so you don't need every variant here.
+
+profanity: damn
+profanity: hell
+profanity: crap
+profanity: ass
+profanity: bitch
+profanity: bastard
+
+explicit_sexual: sex
+explicit_sexual: porn
+explicit_sexual: nude
+
+harassment: kill yourself
+harassment: kys
+harassment: idiot
+harassment: stupid
+
+self_harm_risk: suicide
+self_harm_risk: self harm
+self_harm_risk: hurt myself
