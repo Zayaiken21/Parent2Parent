@@ -9,6 +9,15 @@ def render_profile() -> None:
     profile = st.session_state.get("profile", {})
     shard_id = st.session_state.get("shard_id", "shard_001")
 
+    if not profile or "id" not in profile:
+        # Defensive guard: this page should only ever be reached by a
+        # logged-in parent with a real parent_profiles row. The CEO
+        # role has no Profile tab at all (see frontend/nav.py), but if
+        # this ever gets reached anyway (e.g. stale session state),
+        # fail safely instead of crashing with a KeyError.
+        st.info("No profile to show here.")
+        return
+
     st.markdown(
         f"""
         <section class="app-hero">
