@@ -1,14 +1,16 @@
 """
-Login page: a single Sign In form for everyone. The email/password
-entered is checked against the CEO env-var credentials first (a
-local, no-network comparison); if that doesn't match, it falls
-through to normal parent login against Supabase Auth. Signup (with
-6-digit email verification) lives in its own tab.
+Login page: a single Sign In form for everyone (username + password).
+That form is checked against the CEO env-var credentials first; if it
+doesn't match, it falls through to normal parent login against
+Supabase. Signup lives in its own tab and now uses a CEO-issued
+access token instead of email verification — the parent redeems the
+token once to create a username + password.
 """
 import streamlit as st
 
 from core import auth
-from config.age_bands import AGE_BAND_ORDER, AGE_BANDS, SECURITY_QUESTIONS, age_band_for_birth_year
+from core.parent_tokens import validate_token, TokenError
+from config.age_bands import AGE_BANDS, SECURITY_QUESTIONS, age_band_for_birth_year
 from config.ceo_settings import verify_ceo_login
 from datetime import date
 
@@ -18,37 +20,38 @@ def _rerun():
 
 
 def _clear_signup_flow():
-    for key in ("signup_step", "signup_email", "signup_birth_year", "signup_age_band"):
+    for key in ("signup_step", "signup_token"):
         st.session_state.pop(key, None)
 
 
 def _render_signup() -> None:
-    step = st.session_state.get("signup_step", "request_code")
+    step = st.session_state.get("signup_step", "enter_token")
 
-    if step == "request_code":
+    if step == "enter_token":
         st.subheader("Create Your Account")
-        with st.form("signup_request_form"):
-            email = st.text_input("Email address")
-            submitted = st.form_submit_button("Send Verification Code", use_container_width=True)
+        st.caption("You'll need the access token the CEO gave you to get started.")
+        with st.form("signup_token_form"):
+            token = st.text_input("Access Token", placeholder="6-character code", max_chars=6)
+            submitted = st.form_submit_button("Continue", use_container_width=True)
             if submitted:
                 try:
-                    auth.request_signup_code(email)
-                    st.session_state.signup_email = email.strip().lower()
-                    st.session_state.signup_step = "verify_and_details"
+                    validate_token(token)
+                    st.session_state.signup_token = token.strip().upper()
+                    st.session_state.signup_step = "details"
                     _rerun()
-                except auth.AuthError as exc:
+                except TokenError as exc:
                     st.error(str(exc))
-                except Exception:
-                    st.error("Couldn't send a code right now. Please try again shortly.")
 
-    elif step == "verify_and_details":
-        email = st.session_state.get("signup_email", "")
-        st.subheader("Verify & Finish Your Profile")
-        st.caption(f"We sent a 6-digit code to **{email}**.")
+    elif step == "details":
+        token = st.session_state.get("signup_token", "")
+        st.subheader("Set Up Your Profile")
+        st.caption(f"Token accepted: **{token}**")
 
         with st.form("signup_details_form"):
-            code = st.text_input("6-digit code", max_chars=6)
             first_name = st.text_input("First name only", help="For privacy, only your first name is ever shown to other users.")
+            username = st.text_input("Choose a username")
+            password = st.text_input("Create a password", type="password")
+            confirm = st.text_input("Confirm password", type="password")
 
             this_year = date.today().year
             birth_year = st.number_input(
@@ -75,8 +78,10 @@ def _render_signup() -> None:
                 st.warning("That birth year doesn't match a supported age range yet.")
                 security_answer = ""
 
-            password = st.text_input("Create a password", type="password")
-            confirm = st.text_input("Confirm password", type="password")
+            email = st.text_input(
+                "Email (optional)",
+                placeholder="Only used if you opt in to event emails later",
+            )
 
             submitted = st.form_submit_button("Create Account", use_container_width=True)
             if submitted:
@@ -84,72 +89,28 @@ def _render_signup() -> None:
                     st.error("Passwords do not match.")
                 else:
                     try:
-                        profile = auth.complete_signup(
-                            email=email,
-                            code=code,
+                        auth.complete_signup(
+                            token=token,
+                            username=username,
                             password=password,
                             first_name=first_name,
                             birth_year=int(birth_year),
                             gender=gender,
                             security_answer=security_answer,
+                            email=email,
                         )
                         st.success("Account created! Please sign in.")
                         _clear_signup_flow()
-                        st.session_state.signup_step = "request_code"
+                        st.session_state.signup_step = "enter_token"
                         _rerun()
                     except auth.AuthError as exc:
                         st.error(str(exc))
                     except Exception:
                         st.error("Something went wrong creating your account. Please try again.")
 
-        if st.button("← Use a different email"):
+        if st.button("← Use a different token"):
             _clear_signup_flow()
             _rerun()
-
-
-def _render_password_reset() -> None:
-    step = st.session_state.get("reset_step", "request_code")
-
-    if step == "request_code":
-        st.subheader("Reset Password")
-        with st.form("reset_request_form"):
-            email = st.text_input("Account email")
-            submitted = st.form_submit_button("Send Reset Code", use_container_width=True)
-            if submitted:
-                try:
-                    auth.request_password_reset_code(email)
-                    st.session_state.reset_email = email.strip().lower()
-                    st.session_state.reset_step = "verify"
-                    _rerun()
-                except Exception:
-                    st.error("Couldn't send a code right now. Please try again shortly.")
-
-        if st.button("← Back to login"):
-            st.session_state.pop("reset_mode", None)
-            _rerun()
-
-    elif step == "verify":
-        email = st.session_state.get("reset_email", "")
-        st.subheader("Enter Your Reset Code")
-        st.caption(f"We sent a 6-digit code to **{email}**.")
-        with st.form("reset_verify_form"):
-            code = st.text_input("6-digit code", max_chars=6)
-            new_password = st.text_input("New password", type="password")
-            confirm = st.text_input("Confirm new password", type="password")
-            submitted = st.form_submit_button("Reset Password", use_container_width=True)
-            if submitted:
-                if new_password != confirm:
-                    st.error("Passwords do not match.")
-                else:
-                    try:
-                        auth.complete_password_reset(email, code, new_password)
-                        st.success("Password updated. You can now sign in.")
-                        st.session_state.pop("reset_mode", None)
-                        st.session_state.pop("reset_step", None)
-                        st.session_state.pop("reset_email", None)
-                        _rerun()
-                    except auth.AuthError as exc:
-                        st.error(str(exc))
 
 
 def render_login() -> None:
@@ -166,42 +127,37 @@ def render_login() -> None:
     tab_login, tab_signup = st.tabs(["Sign In", "Create Account"])
 
     with tab_login:
-        if st.session_state.get("reset_mode"):
-            _render_password_reset()
-        else:
-            with st.form("login_form"):
-                email = st.text_input("Email")
-                password = st.text_input("Password", type="password")
-                submitted = st.form_submit_button("Sign In", use_container_width=True)
-                if submitted:
-                    if not email.strip() or not password:
-                        st.error("Enter both email and password.")
-                    elif verify_ceo_login(email, password):
-                        # CEO check happens first and is purely local
-                        # (env-var comparison, no network call), so a
-                        # correct CEO login never touches Supabase at
-                        # all and can't collide with parent_profiles.
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Sign In", use_container_width=True)
+            if submitted:
+                if not username.strip() or not password:
+                    st.error("Enter both username and password.")
+                elif verify_ceo_login(username, password):
+                    # CEO check happens first and is purely local
+                    # (env-var comparison, no network call), so a
+                    # correct CEO login never touches Supabase at all
+                    # and can't collide with a parent username.
+                    st.session_state.authenticated = True
+                    st.session_state.role = "ceo"
+                    st.session_state.active_page = "Settings"
+                    _rerun()
+                else:
+                    try:
+                        profile = auth.login(username, password)
                         st.session_state.authenticated = True
-                        st.session_state.role = "ceo"
-                        st.session_state.active_page = "Events"
+                        st.session_state.role = "parent"
+                        st.session_state.profile = profile
+                        st.session_state.shard_id = profile["_shard_id"]
+                        st.session_state.active_page = "Profile"
                         _rerun()
-                    else:
-                        try:
-                            profile = auth.login(email, password)
-                            st.session_state.authenticated = True
-                            st.session_state.role = "parent"
-                            st.session_state.profile = profile
-                            st.session_state.shard_id = profile["_shard_id"]
-                            st.session_state.active_page = "Profile"
-                            _rerun()
-                        except auth.AuthError as exc:
-                            st.error(str(exc))
-                        except Exception:
-                            st.error("Couldn't sign in right now. Please try again.")
+                    except auth.AuthError as exc:
+                        st.error(str(exc))
+                    except Exception:
+                        st.error("Couldn't sign in right now. Please try again.")
 
-            if st.button("Forgot your password?"):
-                st.session_state.reset_mode = True
-                _rerun()
+        st.caption("Forgot your password? Ask the CEO for a new access token and create your account again.")
 
     with tab_signup:
         _render_signup()

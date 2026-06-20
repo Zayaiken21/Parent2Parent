@@ -130,6 +130,10 @@ def send_digest_to_opted_in_users(shard_id: str, window_offset: int = 0) -> int:
 
     sent = 0
     for user in users:
+        if not user.get("email"):
+            # Shouldn't happen — the UI only allows opting in once an
+            # email is set — but don't let one bad row crash the job.
+            continue
         events = list_events_in_window(shard_id, window_offset, age_band=user.get("age_band"))
         if events:
             send_event_digest_email(user["email"], user["first_name"], events)

@@ -66,6 +66,31 @@ def resolve_shard_for_email(email: str) -> str:
     return "shard_001"
 
 
+def resolve_shard_for_username(username: str) -> str:
+    """Same idea as resolve_shard_for_email, but keyed on username —
+    parents no longer have emails as their login identifier, so
+    username is the lookup key for the shard registry going forward.
+    Uses the same shard_registry table (its 'email' column doubles as
+    a generic identifier column; the name is legacy but the behavior
+    is identical).
+    """
+    control = get_control_client()
+    if control is None:
+        return "shard_001"
+
+    resp = (
+        control.table("shard_registry")
+        .select("shard_id")
+        .eq("email", username.strip().lower())
+        .limit(1)
+        .execute()
+    )
+    rows = resp.data or []
+    if rows:
+        return rows[0]["shard_id"]
+    return "shard_001"
+
+
 def pick_shard_for_new_signup() -> str:
     """Pick the least-full active shard for a brand-new signup.
 
@@ -99,5 +124,15 @@ def register_email_to_shard(email: str, shard_id: str) -> None:
         return  # single-shard mode, nothing to register
     control.table("shard_registry").upsert({
         "email": email.strip().lower(),
+        "shard_id": shard_id,
+    }).execute()
+
+
+def register_username_to_shard(username: str, shard_id: str) -> None:
+    control = get_control_client()
+    if control is None:
+        return  # single-shard mode, nothing to register
+    control.table("shard_registry").upsert({
+        "email": username.strip().lower(),
         "shard_id": shard_id,
     }).execute()

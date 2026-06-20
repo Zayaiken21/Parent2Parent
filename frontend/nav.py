@@ -5,17 +5,20 @@ Parents see 4 sticky primary tabs (Profile, Events, Chat, Logout) plus
 a secondary "More" sub-menu for deeper parenting tools.
 
 The CEO is a moderator role, not a parent profile, so they get a
-trimmed 3-tab bar (Events, Chat, Logout) and no parenting sub-menu —
-their Events tab includes management controls (create/import/delete)
-that parents don't see.
+4-tab bar of their own (Settings, Events, Chat, Logout) and no
+parenting sub-menu — Settings is where the CEO generates/manages
+parent access tokens; Events includes management controls
+(create/import/delete) that parents don't see.
+
+The nav bar renders at the TOP of the page, not the bottom.
 """
 import streamlit as st
 
 
 PARENT_TABS = ["Profile", "Events", "Chat", "Logout"]
-CEO_TABS = ["Events", "Chat", "Logout"]
+CEO_TABS = ["Settings", "Events", "Chat", "Logout"]
 
-ICONS = {"Profile": "👤", "Events": "📅", "Chat": "💬", "Logout": "🚪"}
+ICONS = {"Profile": "👤", "Settings": "⚙️", "Events": "📅", "Chat": "💬", "Logout": "🚪"}
 
 SUBMENU_ITEMS = {
     "Curriculum": "Browse the 0–21 child development guide",
@@ -26,11 +29,11 @@ SUBMENU_ITEMS = {
 }
 
 
-def render_bottom_nav(active_page: str, role: str = "parent") -> str | None:
-    """Renders the sticky tab bar appropriate for the given role.
-    Returns the tab name if a new tab was clicked this run, else None.
-    Caller is responsible for updating st.session_state.active_page
-    and rerunning.
+def render_top_nav(active_page: str, role: str = "parent") -> str | None:
+    """Renders the sticky tab bar appropriate for the given role, at
+    the top of the page. Returns the tab name if a new tab was
+    clicked this run, else None. Caller is responsible for updating
+    st.session_state.active_page and rerunning.
     """
     tabs = CEO_TABS if role == "ceo" else PARENT_TABS
     cols = st.columns(len(tabs))

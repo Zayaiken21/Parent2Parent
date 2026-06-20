@@ -34,7 +34,8 @@ def render_profile() -> None:
     with col2:
         st.markdown('<div class="p2p-card">', unsafe_allow_html=True)
         st.write(f"**First name:** {profile.get('first_name','—')}")
-        st.write(f"**Email:** {profile.get('email','—')}")
+        st.write(f"**Username:** {profile.get('username','—')}")
+        st.write(f"**Email:** {profile.get('email') or '— (none set)'}")
         band = profile.get("age_band", "")
         st.write(f"**Age range:** {AGE_BANDS.get(band, {}).get('label', band)}")
         st.write(f"**Chat room:** {room_label_for(band, profile.get('gender','male'))}" if band else "")
@@ -58,8 +59,26 @@ def render_profile() -> None:
 
     st.divider()
     st.subheader("Event Emails")
+    current_email = profile.get("email") or ""
+    if not current_email:
+        st.caption("Add an email to receive upcoming event details. This is never used for login.")
+        new_email = st.text_input("Email", key="profile_email_input", placeholder="you@example.com")
+        if st.button("Save Email", use_container_width=True):
+            if new_email.strip():
+                client = get_shard_client(shard_id, use_service_role=True)
+                client.table("parent_profiles").update({"email": new_email.strip().lower()}).eq("id", profile["id"]).execute()
+                st.session_state.profile["email"] = new_email.strip().lower()
+                st.rerun()
+    else:
+        st.caption(f"Events will be sent to: {current_email}")
+
     current_opt_in = profile.get("events_opt_in", False)
-    new_opt_in = st.toggle("Send me upcoming event emails", value=current_opt_in)
+    new_opt_in = st.toggle(
+        "Send me upcoming event emails",
+        value=current_opt_in,
+        disabled=not current_email,
+        help=None if current_email else "Add an email above first.",
+    )
     if new_opt_in != current_opt_in:
         client = get_shard_client(shard_id, use_service_role=True)
         client.table("parent_profiles").update({"events_opt_in": new_opt_in}).eq("id", profile["id"]).execute()

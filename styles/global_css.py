@@ -49,20 +49,20 @@ def get_global_css() -> str:
         text-align: center;
     }}
 
-    /* ---------- Sticky bottom main nav (mobile-style tab bar) ---------- */
-    .p2p-bottom-nav {{
+    /* ---------- Sticky top main nav (tab bar) ---------- */
+    .p2p-top-nav {{
         position: sticky;
-        bottom: 0;
+        top: 0;
         z-index: 999;
         display: flex;
         justify-content: space-around;
         align-items: center;
         background: {CARD_BG};
-        border-top: 1px solid #e2e6ea;
-        border-radius: 16px 16px 0 0;
+        border-bottom: 1px solid #e2e6ea;
+        border-radius: 0 0 16px 16px;
         padding: 10px 6px;
-        margin-top: 18px;
-        box-shadow: 0 -4px 14px rgba(0,0,0,0.08);
+        margin-bottom: 18px;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.08);
     }}
 
     /* ---------- Cards ---------- */

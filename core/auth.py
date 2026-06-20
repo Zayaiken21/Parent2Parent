@@ -1,120 +1,78 @@
 """
-Auth flows for Parent2Parent.
+Auth flows for Parent2Parent — token-based signup, username/password
+login, no Supabase Auth dependency for parents.
 
-Password storage/verification is delegated entirely to Supabase Auth
-(auth.users) — we never hash or store passwords ourselves. What we
-add on top:
-  - first-name + age + gender + security-question capture at signup
-  - 6-digit email verification codes (signup + password reset),
-    sent via the email backend, hashed at rest
-  - shard routing so signup/login work the same whether you have
-    1 Supabase project or 50
+Flow:
+  1. CEO generates a 6-character access token (core/parent_tokens.py).
+  2. A parent redeems that token once: picks a username + password,
+     sets age/gender (validated by a security question for their
+     claimed age band), optionally adds an email (events-only).
+  3. From then on, the parent logs in with username + password,
+     checked directly against a bcrypt hash stored in parent_profiles.
+  4. Forgotten password: there is no email-based reset. The parent
+     asks the CEO for a new access token and redeems it again,
+     exactly like your eBay app's original-token reset pattern.
+
+Passwords are hashed with bcrypt — never stored or compared in
+plaintext, and never logged.
 """
 from __future__ import annotations
 
-import hashlib
-import random
-import secrets
-from datetime import datetime, timedelta, timezone
+import bcrypt
 
 from config.age_bands import age_band_for_birth_year, check_security_answer, SECURITY_QUESTIONS
 from config.avatars import default_avatar_key
-from config.ceo_settings import is_ceo_email
+from config.ceo_settings import is_ceo_username
+from core.parent_tokens import validate_token, mark_token_redeemed, TokenError
 from core.supabase_clients import (
     get_shard_client,
     pick_shard_for_new_signup,
-    register_email_to_shard,
-    resolve_shard_for_email,
+    register_username_to_shard,
+    resolve_shard_for_username,
 )
-from backend.email_service import send_verification_email, send_password_reset_email
-
-CODE_TTL_MINUTES = 15
 
 
 class AuthError(Exception):
     pass
 
 
-def _hash_code(code: str, email: str) -> str:
-    # Salted with the email so two users who happen to get the same
-    # code can't be confused with each other.
-    return hashlib.sha256(f"{email.strip().lower()}:{code}".encode()).hexdigest()
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def _generate_code() -> str:
-    return f"{random.randint(0, 999999):06d}"
-
-
-def request_signup_code(email: str) -> None:
-    """Step 1 of signup: send a 6-digit code to the email address."""
-    email = email.strip().lower()
-    if not email or "@" not in email:
-        raise AuthError("Enter a valid email address.")
-    if is_ceo_email(email):
-        raise AuthError("That email address is reserved. Please use a different one.")
-
-    shard_id = pick_shard_for_new_signup()
-    client = get_shard_client(shard_id, use_service_role=True)
-
-    code = _generate_code()
-    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)).isoformat()
-
-    client.table("verification_codes").insert({
-        "email": email,
-        "code_hash": _hash_code(code, email),
-        "purpose": "signup_verify",
-        "expires_at": expires_at,
-    }).execute()
-
-    send_verification_email(to_email=email, code=code, purpose="signup")
-
-
-def _verify_code(client, email: str, code: str, purpose: str) -> bool:
-    email = email.strip().lower()
-    resp = (
-        client.table("verification_codes")
-        .select("id, code_hash, expires_at, consumed_at")
-        .eq("email", email)
-        .eq("purpose", purpose)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    rows = resp.data or []
-    if not rows:
+def _check_password(password: str, password_hash: str) -> bool:
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), password_hash.encode("utf-8"))
+    except (ValueError, TypeError):
+        # Malformed/legacy hash — treat as no match rather than crashing.
         return False
-    row = rows[0]
-    if row.get("consumed_at"):
-        return False
-    expires_at = datetime.fromisoformat(row["expires_at"].replace("Z", "+00:00"))
-    if datetime.now(timezone.utc) > expires_at:
-        return False
-    if row["code_hash"] != _hash_code(code, email):
-        return False
-
-    client.table("verification_codes").update({
-        "consumed_at": datetime.now(timezone.utc).isoformat()
-    }).eq("id", row["id"]).execute()
-    return True
 
 
 def complete_signup(
-    email: str,
-    code: str,
+    token: str,
+    username: str,
     password: str,
     first_name: str,
     birth_year: int,
     gender: str,
     security_answer: str,
+    email: str | None = None,
 ) -> dict:
-    """Step 2 of signup: verify the code, create the auth user, and
-    create the parent_profiles row. Returns the new profile dict."""
-    email = email.strip().lower()
-    shard_id = pick_shard_for_new_signup()
-    client = get_shard_client(shard_id, use_service_role=True)
+    """Redeem an access token and create a parent account. Returns the
+    new profile dict on success."""
+    username = username.strip()
+    if not username:
+        raise AuthError("Choose a username.")
+    if len(username) < 3:
+        raise AuthError("Username must be at least 3 characters.")
+    if is_ceo_username(username):
+        raise AuthError("That username is reserved. Please choose a different one.")
 
-    if not _verify_code(client, email, code, "signup_verify"):
-        raise AuthError("That code is invalid or expired. Request a new one.")
+    if len(password) < 8:
+        raise AuthError("Password must be at least 8 characters.")
+
+    if not first_name.strip():
+        raise AuthError("Enter a first name.")
 
     age_band = age_band_for_birth_year(birth_year)
     if not age_band:
@@ -126,68 +84,79 @@ def complete_signup(
     if gender not in ("male", "female"):
         raise AuthError("Select an option for the chat-room setting.")
 
-    if len(password) < 8:
-        raise AuthError("Password must be at least 8 characters.")
+    shard_id = pick_shard_for_new_signup()
+    client = get_shard_client(shard_id, use_service_role=True)
 
-    if not first_name.strip():
-        raise AuthError("Enter a first name.")
+    # Validate the token against this shard before anything else.
+    try:
+        token_row = validate_token(token, shard_id)
+    except TokenError as exc:
+        raise AuthError(str(exc)) from exc
 
-    # Create the actual auth user (Supabase Auth owns password hashing).
-    auth_resp = client.auth.admin.create_user({
-        "email": email,
-        "password": password,
-        "email_confirm": True,  # we already verified ownership via our own 6-digit code
-    })
-    user = auth_resp.user
-    if not user:
-        raise AuthError("Account creation failed. Try again.")
+    # Username must be unique within this shard.
+    existing = (
+        client.table("parent_profiles")
+        .select("id")
+        .ilike("username", username)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        raise AuthError("That username is already taken.")
+
+    clean_email = (email or "").strip().lower() or None
 
     spec = SECURITY_QUESTIONS[age_band]
     profile = {
-        "id": user.id,
         "first_name": first_name.strip()[:40],
-        "email": email,
+        "username": username,
+        "password_hash": _hash_password(password),
+        "token_used": token_row["token"],
+        "email": clean_email,
         "avatar_key": default_avatar_key(age_band, gender),
         "gender": gender,
         "birth_year": birth_year,
         "age_band": age_band,
         "security_question_key": spec["key"],
-        "security_answer_hash": hashlib.sha256(security_answer.strip().lower().encode()).hexdigest(),
+        "security_answer_hash": _hash_password(security_answer.strip().lower()),
         "events_opt_in": False,
     }
-    client.table("parent_profiles").insert(profile).execute()
-    register_email_to_shard(email, shard_id)
 
-    return profile
+    insert_resp = client.table("parent_profiles").insert(profile).execute()
+    rows = insert_resp.data or []
+    if not rows:
+        raise AuthError("Account creation failed. Try again.")
+    created = rows[0]
+
+    mark_token_redeemed(token_row["token"], created["id"], shard_id)
+    register_username_to_shard(username, shard_id)
+
+    return created
 
 
-def login(email: str, password: str) -> dict:
-    email = email.strip().lower()
-    shard_id = resolve_shard_for_email(email)
-    client = get_shard_client(shard_id, use_service_role=False)
+def login(username: str, password: str) -> dict:
+    username = username.strip()
+    if not username or not password:
+        raise AuthError("Enter both username and password.")
 
-    try:
-        auth_resp = client.auth.sign_in_with_password({"email": email, "password": password})
-    except Exception as exc:
-        raise AuthError("Incorrect email or password.") from exc
+    shard_id = resolve_shard_for_username(username)
+    client = get_shard_client(shard_id, use_service_role=True)
 
-    user = auth_resp.user
-    if not user:
-        raise AuthError("Incorrect email or password.")
-
-    service_client = get_shard_client(shard_id, use_service_role=True)
-    profile_resp = (
-        service_client.table("parent_profiles")
+    resp = (
+        client.table("parent_profiles")
         .select("*")
-        .eq("id", user.id)
+        .ilike("username", username)
         .limit(1)
         .execute()
     )
-    rows = profile_resp.data or []
+    rows = resp.data or []
     if not rows:
-        raise AuthError("Account profile not found. Contact support.")
+        raise AuthError("Incorrect username or password.")
 
     profile = rows[0]
+    if not _check_password(password, profile.get("password_hash") or ""):
+        raise AuthError("Incorrect username or password.")
+
     status = profile.get("account_status")
     if status == "suspended":
         raise AuthError("This account has been suspended.")
@@ -195,44 +164,4 @@ def login(email: str, password: str) -> dict:
         raise AuthError("This account no longer exists.")
 
     profile["_shard_id"] = shard_id
-    profile["_access_token"] = auth_resp.session.access_token if auth_resp.session else None
     return profile
-
-
-def request_password_reset_code(email: str) -> None:
-    email = email.strip().lower()
-    shard_id = resolve_shard_for_email(email)
-    client = get_shard_client(shard_id, use_service_role=True)
-
-    code = _generate_code()
-    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)).isoformat()
-    client.table("verification_codes").insert({
-        "email": email,
-        "code_hash": _hash_code(code, email),
-        "purpose": "password_reset",
-        "expires_at": expires_at,
-    }).execute()
-
-    send_password_reset_email(to_email=email, code=code)
-
-
-def complete_password_reset(email: str, code: str, new_password: str) -> None:
-    email = email.strip().lower()
-    shard_id = resolve_shard_for_email(email)
-    client = get_shard_client(shard_id, use_service_role=True)
-
-    if not _verify_code(client, email, code, "password_reset"):
-        raise AuthError("That code is invalid or expired. Request a new one.")
-
-    if len(new_password) < 8:
-        raise AuthError("Password must be at least 8 characters.")
-
-    profile_resp = (
-        client.table("parent_profiles").select("id").eq("email", email).limit(1).execute()
-    )
-    rows = profile_resp.data or []
-    if not rows:
-        raise AuthError("Account not found.")
-    user_id = rows[0]["id"]
-
-    client.auth.admin.update_user_by_id(user_id, {"password": new_password})
