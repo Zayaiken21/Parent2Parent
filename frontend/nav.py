@@ -1,41 +1,53 @@
 """
-Main navigation: 4 sticky primary tabs (Profile, Events, Chat, Logout)
-plus a secondary "More" sub-menu that expands to reveal the deeper
-curriculum/parenting tools, so the primary bar stays uncluttered.
+Main navigation.
+
+Parents see 4 sticky primary tabs (Profile, Events, Chat, Logout) plus
+a secondary "More" sub-menu for deeper parenting tools.
+
+The CEO is a moderator role, not a parent profile, so they get a
+trimmed 3-tab bar (Events, Chat, Logout) and no parenting sub-menu —
+their Events tab includes management controls (create/import/delete)
+that parents don't see.
 """
 import streamlit as st
 
 
-PRIMARY_TABS = ["Profile", "Events", "Chat", "Logout"]
+PARENT_TABS = ["Profile", "Events", "Chat", "Logout"]
+CEO_TABS = ["Events", "Chat", "Logout"]
+
+ICONS = {"Profile": "👤", "Events": "📅", "Chat": "💬", "Logout": "🚪"}
 
 SUBMENU_ITEMS = {
     "Curriculum": "Browse the 0–21 child development guide",
     "Connection Builder": "Daily prompts for building emotional connection",
     "Structure & Routines": "Tools for building healthy household structure",
+    "Connect Quiz": "A short reflection quiz on your child's learning style — kept private, not stored in our database",
     "CDL Study Tools": "Trucking/CDL study companion",  # kept per existing project scope
 }
 
 
-def render_bottom_nav(active_page: str) -> str | None:
-    """Renders the 4 sticky tabs. Returns the tab name if a new tab
-    was clicked this run, else None. Caller is responsible for
-    updating st.session_state.active_page and rerunning.
+def render_bottom_nav(active_page: str, role: str = "parent") -> str | None:
+    """Renders the sticky tab bar appropriate for the given role.
+    Returns the tab name if a new tab was clicked this run, else None.
+    Caller is responsible for updating st.session_state.active_page
+    and rerunning.
     """
-    cols = st.columns(4)
+    tabs = CEO_TABS if role == "ceo" else PARENT_TABS
+    cols = st.columns(len(tabs))
     clicked = None
-    icons = {"Profile": "👤", "Events": "📅", "Chat": "💬", "Logout": "🚪"}
-    for col, tab in zip(cols, PRIMARY_TABS):
+    for col, tab in zip(cols, tabs):
         with col:
             is_active = tab == active_page
-            label = f"**{icons[tab]} {tab}**" if is_active else f"{icons[tab]} {tab}"
+            label = f"**{ICONS[tab]} {tab}**" if is_active else f"{ICONS[tab]} {tab}"
             if st.button(label, key=f"nav_{tab}", use_container_width=True):
                 clicked = tab
     return clicked
 
 
 def render_submenu(active_subpage: str | None) -> str | None:
-    """Pro-style expandable secondary menu for deeper tools. Returns
-    the clicked item name, or None.
+    """Pro-style expandable secondary menu for deeper parenting tools.
+    Parent-only — the CEO role never calls this. Returns the clicked
+    item name, or None.
     """
     clicked = None
     with st.expander("⚙️  More Parenting Tools", expanded=bool(active_subpage)):

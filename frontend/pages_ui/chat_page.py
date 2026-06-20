@@ -69,7 +69,7 @@ def _render_ceo_chat_oversight() -> None:
 
     st.markdown(
         """
-        <section class="app-hero">
+        <section class="app-hero ceo">
             <h1>Chat Oversight</h1>
             <p>All community rooms, in one place.</p>
         </section>

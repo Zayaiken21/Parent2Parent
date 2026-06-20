@@ -183,7 +183,7 @@ def render_login() -> None:
                         # all and can't collide with parent_profiles.
                         st.session_state.authenticated = True
                         st.session_state.role = "ceo"
-                        st.session_state.active_page = "Chat"
+                        st.session_state.active_page = "Events"
                         _rerun()
                     else:
                         try:
