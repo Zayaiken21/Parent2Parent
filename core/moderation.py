@@ -14,6 +14,25 @@ from datetime import datetime, timezone
 from core.supabase_clients import get_shard_client
 
 
+def list_all_users(shard_id: str, limit: int = 500) -> list[dict]:
+    """All parent accounts, newest first — powers the CEO Settings
+    user-management table. Since accounts are created atomically now
+    (shared access code, no multi-step token redemption), a row
+    existing here with a username + password_hash set IS the
+    "fully created" signal — there's no partial/pending state to
+    track separately.
+    """
+    client = get_shard_client(shard_id, use_service_role=True)
+    resp = (
+        client.table("parent_profiles")
+        .select("id, first_name, username, email, age_band, gender, account_status, events_opt_in, created_at")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute()
+    )
+    return resp.data or []
+
+
 def list_open_flags(shard_id: str, limit: int = 50) -> list[dict]:
     client = get_shard_client(shard_id, use_service_role=True)
     resp = (
