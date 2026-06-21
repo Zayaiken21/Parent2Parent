@@ -13,6 +13,7 @@ from frontend.pages_ui.connection_page import render_connection_builder
 from frontend.pages_ui.structure_page import render_structure_tools
 from frontend.pages_ui.connect_quiz_page import render_connect_quiz
 from frontend.pages_ui.ceo_settings_page import render_ceo_settings
+from frontend.pages_ui.nyc_resources_page import render_nyc_resources
 
 st.set_page_config(page_title="Parent2Parent", page_icon="💛", layout="centered")
 st.markdown(get_global_css(), unsafe_allow_html=True)
@@ -69,6 +70,8 @@ def main() -> None:
         render_structure_tools()
     elif sub_page == "Connect Quiz":
         render_connect_quiz()
+    elif sub_page == "NYC Programs & Resources":
+        render_nyc_resources()
     elif active_page == "Settings":
         render_ceo_settings()
     elif active_page == "Profile":

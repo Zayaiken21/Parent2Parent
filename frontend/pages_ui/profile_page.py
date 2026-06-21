@@ -22,7 +22,8 @@ def render_profile() -> None:
     band = profile.get("age_band", "")
     gender = profile.get("gender", "male")
     band_label = AGE_BANDS.get(band, {}).get("label", band)
-    avatar_path = f"assets/avatars/{profile.get('avatar_key', 'default')}.svg"
+    avatar_key = profile.get("avatar_key") or "default"
+    avatar_path = f"assets/avatars/{avatar_key}.svg"
     avatar_html = avatar_img_html(avatar_path, size_px=100)
 
     # ---------------- Profile header: framed avatar front and center ----------------

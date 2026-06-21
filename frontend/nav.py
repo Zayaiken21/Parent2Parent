@@ -25,15 +25,15 @@ SUBMENU_ITEMS = {
     "Connection Builder": "Daily prompts for building emotional connection",
     "Structure & Routines": "Tools for building healthy household structure",
     "Connect Quiz": "A short reflection quiz on your child's learning style — kept private, not stored in our database",
-    "CDL Study Tools": "Trucking/CDL study companion",  # kept per existing project scope
+    "NYC Programs & Resources": "Fatherhood/parenting programs, training apps, and community resources",
 }
 
 # Items in this map open an external site directly via st.link_button
 # instead of routing to an internal page — clicking "Open" leaves the
-# app immediately in a new tab, no in-between page.
-SUBMENU_EXTERNAL_LINKS = {
-    "CDL Study Tools": "https://nyccdlpro.streamlit.app/",
-}
+# app immediately in a new tab, no in-between page. (CDL Pro now lives
+# inside the NYC Programs & Resources directory instead of its own
+# standalone sub-menu link, alongside other training apps.)
+SUBMENU_EXTERNAL_LINKS: dict[str, str] = {}
 
 
 def render_top_nav(active_page: str, role: str = "parent") -> str | None:
