@@ -28,6 +28,14 @@ SUBMENU_ITEMS = {
     "NYC Programs & Resources": "Fatherhood/parenting programs, training apps, and community resources",
 }
 
+SUBMENU_ICONS = {
+    "Curriculum": "📘",
+    "Connection Builder": "💛",
+    "Structure & Routines": "🧱",
+    "Connect Quiz": "✨",
+    "NYC Programs & Resources": "🗽",
+}
+
 # Items in this map open an external site directly via st.link_button
 # instead of routing to an internal page — clicking "Open" leaves the
 # app immediately in a new tab, no in-between page. (CDL Pro now lives
@@ -55,26 +63,36 @@ def render_top_nav(active_page: str, role: str = "parent") -> str | None:
 
 
 def render_submenu(active_subpage: str | None) -> str | None:
-    """Pro-style expandable secondary menu for deeper parenting tools.
-    Parent-only — the CEO role never calls this. Returns the clicked
-    item name for INTERNAL items (caller routes to a page), or None.
-    Items listed in SUBMENU_EXTERNAL_LINKS render as a direct link
-    button instead and never return a value — clicking them leaves
-    the app immediately, there's nothing for the caller to route to.
+    """Pro-style tool tiles for deeper parenting tools, each a
+    self-contained styled card with its own button — avoids relying
+    on Streamlit's plain expander look. Parent-only — the CEO role
+    never calls this. Returns the clicked item name for INTERNAL
+    items (caller routes to a page), or None. Items listed in
+    SUBMENU_EXTERNAL_LINKS render as a direct link button instead and
+    never return a value — clicking them leaves the app immediately.
     """
     clicked = None
-    with st.expander("⚙️  More Parenting Tools", expanded=bool(active_subpage)):
-        for item, desc in SUBMENU_ITEMS.items():
-            c1, c2 = st.columns([3, 1])
-            with c1:
-                st.markdown(f"**{item}**")
-                st.caption(desc)
-            with c2:
-                external_url = SUBMENU_EXTERNAL_LINKS.get(item)
-                if external_url:
-                    st.link_button("Open ↗", external_url, use_container_width=True)
-                else:
-                    if st.button("Open", key=f"submenu_{item}", use_container_width=True):
-                        clicked = item
-            st.divider()
+    st.markdown('<div class="p2p-submenu-heading">✨ More Parenting Tools</div>', unsafe_allow_html=True)
+    for item, desc in SUBMENU_ITEMS.items():
+        icon = SUBMENU_ICONS.get(item, "🔹")
+        st.markdown(f'<div class="p2p-submenu-tile">', unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="p2p-submenu-tile-header">
+                <div class="p2p-submenu-icon">{icon}</div>
+                <div class="p2p-submenu-text">
+                    <div class="p2p-submenu-title">{item}</div>
+                    <div class="p2p-submenu-desc">{desc}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        external_url = SUBMENU_EXTERNAL_LINKS.get(item)
+        if external_url:
+            st.link_button(f"Open ↗", external_url, use_container_width=True, key=f"submenu_link_{item}")
+        else:
+            if st.button("Open", key=f"submenu_{item}", use_container_width=True):
+                clicked = item
+        st.markdown('</div>', unsafe_allow_html=True)
     return clicked

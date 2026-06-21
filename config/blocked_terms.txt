@@ -22,18 +22,54 @@ profanity: damn
 profanity: hell
 profanity: crap
 profanity: ass
+profanity: asshole
 profanity: bitch
 profanity: bastard
+profanity: shit
+profanity: bullshit
+profanity: bullcrap
+profanity: fuck
+profanity: fucking
+profanity: fucked
+profanity: motherfucker
+profanity: dick
+profanity: piss
+profanity: pissed
+profanity: douche
+profanity: douchebag
+profanity: prick
+profanity: whore
+profanity: slut
+profanity: cunt
+profanity: cock
+profanity: jackass
 
 explicit_sexual: sex
 explicit_sexual: porn
 explicit_sexual: nude
+explicit_sexual: naked
+explicit_sexual: blowjob
+explicit_sexual: handjob
 
 harassment: kill yourself
 harassment: kys
 harassment: idiot
 harassment: stupid
+harassment: moron
+harassment: retard
+harassment: retarded
+harassment: loser
+harassment: worthless
+harassment: pathetic
+harassment: shut up
+harassment: fuck you
+harassment: fuck off
+harassment: go to hell
 
 self_harm_risk: suicide
 self_harm_risk: self harm
 self_harm_risk: hurt myself
+self_harm_risk: kill myself
+self_harm_risk: end it all
+self_harm_risk: want to die
+self_harm_risk: dont want to be here

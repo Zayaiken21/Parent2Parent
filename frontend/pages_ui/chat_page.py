@@ -13,6 +13,8 @@ def _render_message_list(messages: list[dict]) -> None:
     if not messages:
         st.caption("No messages yet. Say hello! 👋")
         return
+    # Standard chat order: oldest at top, newest at the bottom, right
+    # above where you type -- matches familiar chat apps.
     for msg in messages:
         name = msg.get("sender_first_name", "Parent")
         avatar_key = msg.get("sender_avatar_key") or "default"
@@ -32,6 +34,26 @@ def _render_message_list(messages: list[dict]) -> None:
             """,
             unsafe_allow_html=True,
         )
+    # Best-effort auto-scroll: attempts to scroll the chat container to
+    # the latest message. Browser/Streamlit-version script execution
+    # for markdown-injected <script> tags is inconsistent (confirmed
+    # via community reports, not guaranteed to work in every version),
+    # so this is a nice-to-have, not the only way to see new messages
+    # -- the "Jump to latest" button below is the reliable fallback.
+    st.markdown(
+        """
+        <div id="p2p-chat-bottom-anchor"></div>
+        <script>
+            (function() {
+                try {
+                    var anchor = window.parent.document.getElementById('p2p-chat-bottom-anchor');
+                    if (anchor) { anchor.scrollIntoView({block: 'end'}); }
+                } catch (e) { /* fails silently if cross-frame access is blocked */ }
+            })();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 @st.fragment(run_every=REFRESH_SECONDS)
@@ -40,6 +62,8 @@ def _live_chat_fragment(shard_id: str, room_key: str) -> None:
     chat_container = st.container(height=420)
     with chat_container:
         _render_message_list(history)
+    if st.button("⬇ Jump to latest", key="jump_to_latest", use_container_width=True):
+        st.rerun(scope="fragment")
 
 
 def _render_user_chat() -> None:
@@ -58,7 +82,6 @@ def _render_user_chat() -> None:
     )
 
     _live_chat_fragment(shard_id, room_key)
-    st.caption(f"Refreshes automatically every {REFRESH_SECONDS} seconds.")
 
     with st.form("chat_send_form", clear_on_submit=True):
         text = st.text_input("Message", label_visibility="collapsed", placeholder="Type a message...")

@@ -3,6 +3,7 @@ import bootstrap  # noqa: F401  — must run first to populate os.environ
 import streamlit as st
 
 from styles.global_css import get_global_css
+from styles.time_of_day_scenes import maybe_render_time_of_day_scene
 from frontend.login import render_login
 from frontend.nav import render_top_nav, render_submenu
 from frontend.pages_ui.profile_page import render_profile
@@ -15,7 +16,7 @@ from frontend.pages_ui.connect_quiz_page import render_connect_quiz
 from frontend.pages_ui.ceo_settings_page import render_ceo_settings
 from frontend.pages_ui.nyc_resources_page import render_nyc_resources
 
-st.set_page_config(page_title="Parent2Parent", page_icon="💛", layout="centered")
+st.set_page_config(page_title="Parent2Parent", page_icon="💛", layout="wide")
 st.markdown(get_global_css(), unsafe_allow_html=True)
 
 
@@ -29,6 +30,8 @@ def main() -> None:
     if not st.session_state.get("authenticated"):
         render_login()
         return
+
+    maybe_render_time_of_day_scene()
 
     role = st.session_state.get("role", "parent")
 

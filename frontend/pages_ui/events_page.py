@@ -215,3 +215,13 @@ def render_events() -> None:
             if st.button("Later →"):
                 st.session_state.events_window_offset += 1
                 st.rerun()
+
+    st.markdown(
+        """
+        <div class="p2p-page-footer">
+            <div class="p2p-page-footer-brand">Parent2Parent</div>
+            <div class="p2p-page-footer-tag">Real people. Real problems. Real education. · Est. 2026</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

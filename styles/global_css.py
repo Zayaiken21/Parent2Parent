@@ -53,10 +53,51 @@ def get_global_css() -> str:
         50%  {{ background-position: 100% 60%; }}
         100% {{ background-position: 0% 0%; }}
     }}
+    /* Width targeting uses data-testid selectors (Streamlit's stated
+       stable API surface) ALONGSIDE class/element selectors from
+       older DOM versions, since plain class-name targeting has been
+       reported to stop working reliably across Streamlit version
+       upgrades — this covers every plausible version's markup so it
+       survives version changes either way. */
+    div[data-testid="stAppViewContainer"] .block-container,
+    div[data-testid="stMainBlockContainer"],
+    section.main > div.block-container,
+    .appview-container .block-container,
     .block-container {{
-        padding-top: 0.6rem;
-        padding-bottom: 2rem;
-        max-width: 720px;
+        padding-top: 0.6rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 3rem !important;
+        padding-right: 3rem !important;
+        max-width: 1600px !important;
+        margin: 0 auto !important;
+        width: 100% !important;
+    }}
+    /* Some Streamlit versions wrap content in an additional outer
+       element that itself constrains width — neutralize that too. */
+    div[data-testid="stAppViewContainer"],
+    section.main {{
+        max-width: 100% !important;
+        width: 100% !important;
+    }}
+    /* Tablet: a bit narrower than full desktop width, still roomy */
+    @media (max-width: 900px) {{
+        div[data-testid="stAppViewContainer"] .block-container,
+        div[data-testid="stMainBlockContainer"],
+        .block-container {{
+            max-width: 100% !important;
+            padding-left: 1.2rem !important;
+            padding-right: 1.2rem !important;
+        }}
+    }}
+    /* Phone: full width, minimal side padding so nothing feels cramped */
+    @media (max-width: 480px) {{
+        div[data-testid="stAppViewContainer"] .block-container,
+        div[data-testid="stMainBlockContainer"],
+        .block-container {{
+            max-width: 100% !important;
+            padding-left: 0.7rem !important;
+            padding-right: 0.7rem !important;
+        }}
     }}
     h1, h2, h3, h4 {{
         font-family: {FONT_STACK} !important;
@@ -101,6 +142,62 @@ def get_global_css() -> str:
     }}
     @media (max-width: 480px) {{
         .p2p-top-nav .stButton button {{ font-size: 11px; padding: 6px 2px; }}
+    }}
+
+    /* Responsive nav switch: show the full tab row on tablet/desktop,
+       show the hamburger row + collapsible menu on phones. Exactly
+       one of the two is visible at any given width. */
+    .p2p-nav-desktop-row {{ display: block; }}
+    .p2p-nav-mobile-row {{ display: none; }}
+    .p2p-nav-mobile-menu {{ display: none; }}
+    @media (max-width: 640px) {{
+        .p2p-nav-desktop-row {{ display: none; }}
+        .p2p-nav-mobile-row {{ display: block; }}
+        .p2p-nav-mobile-menu {{ display: block; }}
+    }}
+
+    .p2p-nav-mobile-row {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 8px;
+    }}
+    @media (max-width: 640px) {{
+        .p2p-nav-mobile-row {{ display: flex; }}
+    }}
+    .p2p-nav-mobile-current {{
+        font-weight: 700;
+        font-size: 15px;
+        color: {TEXT_DARK};
+    }}
+    .p2p-top-nav .p2p-nav-mobile-row .stButton button {{
+        background: {GRADIENT_MAIN};
+        color: #fff;
+        font-size: 18px;
+        border-radius: 10px;
+        width: 42px;
+        height: 38px;
+        padding: 0;
+    }}
+    .p2p-nav-mobile-menu {{
+        background: {CARD_BG};
+        border-radius: 0 0 16px 16px;
+        padding: 6px 10px 10px;
+        border-top: 1px solid rgba(91,60,196,0.08);
+    }}
+    .p2p-nav-mobile-menu .stButton button {{
+        text-align: left;
+        justify-content: flex-start;
+        background: transparent;
+        color: {TEXT_MUTED};
+        font-weight: 600;
+        font-size: 14px;
+        padding: 10px 12px;
+        margin-bottom: 2px;
+    }}
+    .p2p-nav-mobile-menu .stButton button:hover {{
+        background: rgba(91,60,196,0.08);
+        color: {PRIMARY};
     }}
 
     /* HERO / PAGE HEADER */
@@ -257,14 +354,54 @@ def get_global_css() -> str:
         to {{ opacity: 1; transform: translateY(0); }}
     }}
 
-    /* SUB-MENU / EXPANDERS */
-    .p2p-submenu-trigger {{
-        background: {PRIMARY_DARK};
-        color: #fff;
+    /* SUB-MENU TOOL TILES */
+    .p2p-submenu-heading {{
+        font-size: 18px;
+        font-weight: 800;
+        color: {TEXT_DARK};
+        margin: 8px 0 14px;
+        text-align: center;
+    }}
+    .p2p-submenu-tile {{
+        background: {CARD_BG};
+        border-radius: 18px;
+        padding: 16px 18px 14px;
+        margin-bottom: 12px;
+        border: 1px solid #ECEFF2;
+        box-shadow: 0 3px 14px rgba(91, 60, 196, 0.08);
+        transition: box-shadow 0.2s ease, transform 0.15s ease;
+    }}
+    .p2p-submenu-tile:hover {{
+        box-shadow: 0 8px 22px rgba(91, 60, 196, 0.16);
+        transform: translateY(-1px);
+    }}
+    .p2p-submenu-tile-header {{
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }}
+    .p2p-submenu-icon {{
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
         border-radius: 12px;
-        padding: 10px 16px;
-        font-size: 14px;
-        font-weight: 600;
+        background: {GRADIENT_MAIN};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        box-shadow: 0 3px 10px rgba(91,60,196,0.25);
+    }}
+    .p2p-submenu-title {{
+        font-weight: 700;
+        color: {TEXT_DARK};
+        font-size: 15px;
+    }}
+    .p2p-submenu-desc {{
+        color: {TEXT_MUTED};
+        font-size: 12.5px;
+        margin-top: 1px;
     }}
     div[data-testid="stExpander"] {{
         border-radius: 16px !important;
@@ -508,6 +645,138 @@ def get_global_css() -> str:
     @keyframes p2pFloatB {{
         0%, 100% {{ transform: translate(0, 0); }}
         50% {{ transform: translate(-50px, -40px); }}
+    }}
+
+    /* TIME-OF-DAY SCENES — brief (~3s) decorative overlays, never
+       block interaction, never affect layout/scroll. Self-contained:
+       fade in, play, fade out, collapse to zero height. */
+    .p2p-scene-overlay {{
+        position: fixed;
+        top: 0; left: 0; right: 0;
+        height: 100vh;
+        pointer-events: none;
+        z-index: 9000;
+        overflow: hidden;
+        animation: p2pSceneLifecycle 3s ease forwards;
+    }}
+    @keyframes p2pSceneLifecycle {{
+        0%   {{ opacity: 0; }}
+        10%  {{ opacity: 1; }}
+        80%  {{ opacity: 1; }}
+        100% {{ opacity: 0; height: 0; }}
+    }}
+
+    .p2p-scene-midnight {{
+        background: linear-gradient(180deg, rgba(10,8,30,0.55) 0%, rgba(20,15,45,0.25) 60%, transparent 100%);
+    }}
+    .p2p-scene-comet {{
+        position: absolute;
+        top: 12%;
+        left: -10%;
+        width: 6px;
+        height: 6px;
+        background: #FFFFFF;
+        border-radius: 50%;
+        box-shadow: 0 0 12px 4px rgba(255,255,255,0.9), -40px 4px 18px rgba(180,200,255,0.5);
+        animation: p2pCometFly 2.6s ease-in forwards;
+    }}
+    .p2p-scene-comet::after {{
+        content: "";
+        position: absolute;
+        top: 1px;
+        right: 4px;
+        width: 140px;
+        height: 2px;
+        background: linear-gradient(90deg, rgba(255,255,255,0.9), transparent);
+        transform: rotate(8deg);
+    }}
+    @keyframes p2pCometFly {{
+        0%   {{ transform: translate(0, 0); opacity: 0; }}
+        12%  {{ opacity: 1; }}
+        100% {{ transform: translate(130vw, 55vh); opacity: 0.2; }}
+    }}
+    .p2p-scene-stars {{
+        position: absolute;
+        inset: 0;
+        background-image:
+            radial-gradient(1.5px 1.5px at 20% 30%, white, transparent),
+            radial-gradient(1.5px 1.5px at 70% 15%, white, transparent),
+            radial-gradient(1px 1px at 85% 45%, white, transparent),
+            radial-gradient(1px 1px at 40% 70%, white, transparent),
+            radial-gradient(1.5px 1.5px at 55% 25%, white, transparent);
+        opacity: 0.6;
+    }}
+
+    .p2p-scene-noon {{
+        background: linear-gradient(180deg, rgba(173,216,235,0.30) 0%, rgba(220,240,250,0.12) 70%, transparent 100%);
+    }}
+    .p2p-scene-plane {{
+        position: absolute;
+        top: 14%;
+        left: -8%;
+        font-size: 30px;
+        animation: p2pPlaneFly 2.8s ease-in-out forwards;
+    }}
+    @keyframes p2pPlaneFly {{
+        0%   {{ transform: translate(0, 0) rotate(0deg); opacity: 0; }}
+        15%  {{ opacity: 1; }}
+        100% {{ transform: translate(125vw, 8vh) rotate(2deg); opacity: 0.3; }}
+    }}
+    .p2p-scene-cloud {{
+        position: absolute;
+        width: 90px;
+        height: 30px;
+        background: rgba(255,255,255,0.55);
+        border-radius: 50px;
+        filter: blur(1px);
+        animation: p2pCloudDrift 3s ease-in-out forwards;
+    }}
+    .p2p-scene-cloud-1 {{ top: 22%; left: 10%; animation-delay: 0.2s; }}
+    .p2p-scene-cloud-2 {{ top: 35%; left: 55%; animation-delay: 0.5s; width: 70px; height: 24px; }}
+    @keyframes p2pCloudDrift {{
+        0%   {{ transform: translateX(0); opacity: 0; }}
+        20%  {{ opacity: 0.8; }}
+        100% {{ transform: translateX(40px); opacity: 0; }}
+    }}
+
+    /* PAGE FOOTER */
+    .p2p-page-footer {{
+        text-align: center;
+        margin-top: 32px;
+        padding: 18px 0 8px;
+        border-top: 1px solid rgba(91,60,196,0.10);
+        color: {TEXT_MUTED};
+        font-size: 12px;
+    }}
+    .p2p-page-footer .p2p-footer-brand {{
+        font-weight: 700;
+        background: {GRADIENT_MAIN};
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 13px;
+    }}
+
+    /* PAGE FOOTER — reusable closing element so pages don't just end
+       abruptly with the last button on screen. */
+    .p2p-page-footer {{
+        text-align: center;
+        margin-top: 32px;
+        padding: 18px 12px;
+        border-top: 1px solid rgba(91,60,196,0.10);
+    }}
+    .p2p-page-footer-brand {{
+        font-weight: 800;
+        font-size: 14px;
+        background: {GRADIENT_MAIN};
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }}
+    .p2p-page-footer-tag {{
+        font-size: 11.5px;
+        color: {TEXT_MUTED};
+        margin-top: 2px;
     }}
 
     /* MOBILE TUNING */
