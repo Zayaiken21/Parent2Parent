@@ -7,12 +7,21 @@ here that the CEO sign-in is env-based.
 Required in .env (or Streamlit Cloud secrets):
     CEO_USERNAME=your_ceo_username
     CEO_PASSWORD=choose-a-strong-one
+    PARENT_ACCESS_CODE=choose-a-shared-code
 
 CEO_EMAIL is still read as a fallback for backwards compatibility
 with earlier setups, but CEO_USERNAME is preferred going forward
 since parent accounts are now username/password-based too (no email
 required), and the CEO sign-in form is the same single form parents
 use — just checked against these env vars first.
+
+PARENT_ACCESS_CODE is a single shared code, the same for every parent
+— it only gates ENTRY to the signup form, never login. Anyone who
+knows the code can reach the "create your account" screen, but they
+still must set their own unique username + password there, and every
+login afterward checks username + password only. Knowing the shared
+code never grants access to another person's account, since the code
+isn't tied to any individual account at all.
 
 .env must be in .gitignore — see the .gitignore written alongside
 this file.
@@ -62,3 +71,10 @@ def is_ceo_username(username: str) -> bool:
     if not expected_username:
         return False
     return username.strip().lower() == expected_username
+
+
+def verify_parent_access_code(submitted_code: str) -> bool:
+    expected_code = os.environ.get("PARENT_ACCESS_CODE", "").strip()
+    if not expected_code:
+        return False
+    return submitted_code.strip() == expected_code

@@ -234,6 +234,18 @@ def stages_relevant_to_age_band(age_band: str) -> list[dict]:
         "21_23": ["6_12y", "12_15y"],
         "23_25": ["12_15y", "15_18y"],
         "25_27": ["15_18y", "18_21y"],
+        # Above 27, parents are statistically more likely raising
+        # school-age kids through young adults — and at the older end,
+        # are plausibly grandparents raising a grandchild, so we keep
+        # the suggestion list broad rather than narrowing too far.
+        "27_32": ["3_5y", "6_12y"],
+        "32_37": ["6_12y", "12_15y"],
+        "37_42": ["12_15y", "15_18y"],
+        "42_47": ["15_18y", "18_21y"],
+        "47_52": ["15_18y", "18_21y"],
+        "52_57": ["0_3mo", "3_6mo", "6_9mo", "1_3y"],  # plausibly raising a grandchild
+        "57_62": ["0_3mo", "3_6mo", "6_9mo", "1_3y"],
+        "62_65": ["0_3mo", "3_6mo", "6_9mo", "1_3y"],
     }
     keys = suggestions.get(age_band, [])
     return [s for s in CURRICULUM_STAGES if s["stage_key"] in keys]

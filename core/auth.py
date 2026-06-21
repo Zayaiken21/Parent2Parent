@@ -1,17 +1,22 @@
 """
-Auth flows for Parent2Parent — token-based signup, username/password
-login, no Supabase Auth dependency for parents.
+Auth flows for Parent2Parent — shared access-code signup, username/
+password login, no Supabase Auth dependency for parents.
 
 Flow:
-  1. CEO generates a 6-character access token (core/parent_tokens.py).
-  2. A parent redeems that token once: picks a username + password,
-     sets age/gender (validated by a security question for their
-     claimed age band), optionally adds an email (events-only).
+  1. The CEO sets one shared code in env (PARENT_ACCESS_CODE).
+  2. A parent enters that code to unlock the signup form, then picks
+     their own username + password, sets age/gender, optionally adds
+     an email (events-only). There is no per-account token and no
+     security question — the shared code only gates entry to the
+     form, it is never an account identifier.
   3. From then on, the parent logs in with username + password,
      checked directly against a bcrypt hash stored in parent_profiles.
-  4. Forgotten password: there is no email-based reset. The parent
-     asks the CEO for a new access token and redeems it again,
-     exactly like your eBay app's original-token reset pattern.
+     Knowing the shared code never grants access to another person's
+     account — accounts are looked up strictly by username, and the
+     code isn't stored against any individual account at all.
+  4. Forgotten password: there is no email-based reset currently. The
+     parent re-enters the shared code and creates a new account under
+     a different username, or contacts the CEO for manual help.
 
 Passwords are hashed with bcrypt — never stored or compared in
 plaintext, and never logged.
@@ -20,10 +25,9 @@ from __future__ import annotations
 
 import bcrypt
 
-from config.age_bands import age_band_for_birth_year, check_security_answer, SECURITY_QUESTIONS
+from config.age_bands import age_band_for_birth_year
 from config.avatars import default_avatar_key
-from config.ceo_settings import is_ceo_username
-from core.parent_tokens import validate_token, mark_token_redeemed, TokenError
+from config.ceo_settings import is_ceo_username, verify_parent_access_code
 from core.supabase_clients import (
     get_shard_client,
     pick_shard_for_new_signup,
@@ -49,17 +53,22 @@ def _check_password(password: str, password_hash: str) -> bool:
 
 
 def complete_signup(
-    token: str,
+    access_code: str,
     username: str,
     password: str,
     first_name: str,
     birth_year: int,
     gender: str,
-    security_answer: str,
     email: str | None = None,
 ) -> dict:
-    """Redeem an access token and create a parent account. Returns the
-    new profile dict on success."""
+    """Verify the shared access code, then create a parent account.
+    Returns the new profile dict on success. The access_code is
+    checked but never stored against the created account — it's a
+    one-time gate to reach this form, not an account credential.
+    """
+    if not verify_parent_access_code(access_code):
+        raise AuthError("That access code is incorrect.")
+
     username = username.strip()
     if not username:
         raise AuthError("Choose a username.")
@@ -78,20 +87,11 @@ def complete_signup(
     if not age_band:
         raise AuthError("We couldn't match that birth year to a supported age range.")
 
-    if not check_security_answer(age_band, security_answer):
-        raise AuthError("That answer doesn't match what we'd expect for this age range.")
-
     if gender not in ("male", "female"):
         raise AuthError("Select an option for the chat-room setting.")
 
     shard_id = pick_shard_for_new_signup()
     client = get_shard_client(shard_id, use_service_role=True)
-
-    # Validate the token against this shard before anything else.
-    try:
-        token_row = validate_token(token, shard_id)
-    except TokenError as exc:
-        raise AuthError(str(exc)) from exc
 
     # Username must be unique within this shard.
     existing = (
@@ -106,19 +106,15 @@ def complete_signup(
 
     clean_email = (email or "").strip().lower() or None
 
-    spec = SECURITY_QUESTIONS[age_band]
     profile = {
         "first_name": first_name.strip()[:40],
         "username": username,
         "password_hash": _hash_password(password),
-        "token_used": token_row["token"],
         "email": clean_email,
         "avatar_key": default_avatar_key(age_band, gender),
         "gender": gender,
         "birth_year": birth_year,
         "age_band": age_band,
-        "security_question_key": spec["key"],
-        "security_answer_hash": _hash_password(security_answer.strip().lower()),
         "events_opt_in": False,
     }
 
@@ -128,7 +124,6 @@ def complete_signup(
         raise AuthError("Account creation failed. Try again.")
     created = rows[0]
 
-    mark_token_redeemed(token_row["token"], created["id"], shard_id)
     register_username_to_shard(username, shard_id)
 
     return created

@@ -2,7 +2,7 @@ import streamlit as st
 
 from config.age_bands import room_key_for, room_label_for
 from core.chat_backend import send_message, fetch_recent_history, ceo_fetch_all_rooms_recent, ChatError
-from core.moderation import list_open_flags, clear_flag, suspend_user
+from core.moderation import list_open_flags, clear_flag, suspend_user, delete_user
 
 
 def _render_message_list(messages: list[dict]) -> None:
@@ -112,16 +112,28 @@ def _render_ceo_chat_oversight() -> None:
                 st.caption(flag["detail"])
             st.caption(f"Flagged: {flag.get('created_at','')}")
 
-            c1, c2 = st.columns(2)
+            c1, c2, c3 = st.columns(3)
             with c1:
                 if st.button("Clear flag", key=f"clear_{flag['id']}", use_container_width=True):
                     clear_flag(shard_id, flag["id"])
                     st.rerun()
             with c2:
-                if st.button("Revoke access", key=f"revoke_{flag['id']}", type="primary", use_container_width=True):
+                if st.button("Revoke access", key=f"revoke_{flag['id']}", use_container_width=True):
                     suspend_user(shard_id, flag["parent_id"], flag_id=flag["id"])
-                    st.success("User access revoked.")
+                    st.success("User access revoked. Account is suspended but data is kept — reversible.")
                     st.rerun()
+            with c3:
+                confirm_key = f"confirm_delete_{flag['id']}"
+                if st.session_state.get(confirm_key):
+                    if st.button("⚠️ Confirm delete", key=f"confirmed_{flag['id']}", type="primary", use_container_width=True):
+                        delete_user(shard_id, flag["parent_id"], flag_id=flag["id"])
+                        st.session_state.pop(confirm_key, None)
+                        st.success("Account permanently deleted.")
+                        st.rerun()
+                else:
+                    if st.button("Delete account", key=f"delete_{flag['id']}", use_container_width=True):
+                        st.session_state[confirm_key] = True
+                        st.rerun()
             st.markdown("</div>", unsafe_allow_html=True)
 
 

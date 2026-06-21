@@ -1,6 +1,8 @@
+import os
+
 import streamlit as st
 
-from core.parent_tokens import generate_token, list_tokens, deactivate_token, TokenError
+from core.supabase_clients import get_shard_client
 
 
 def render_ceo_settings() -> None:
@@ -10,47 +12,57 @@ def render_ceo_settings() -> None:
         """
         <section class="app-hero ceo">
             <h1>Settings</h1>
-            <p>Generate and manage parent access tokens.</p>
+            <p>Shared access code and account overview.</p>
         </section>
         """,
         unsafe_allow_html=True,
     )
 
     st.markdown('<div class="p2p-card">', unsafe_allow_html=True)
-    st.markdown("### Generate a New Access Token")
-    st.caption("Give this 6-character code to a parent. They'll use it once to create their account.")
-    if st.button("Generate Token", type="primary", use_container_width=True):
-        try:
-            token = generate_token(shard_id)
-            st.success("New token created:")
-            st.code(token, language=None)
-        except TokenError as exc:
-            st.error(str(exc))
+    st.markdown("### Parent Access Code")
+    code_set = bool(os.environ.get("PARENT_ACCESS_CODE", "").strip())
+    if code_set:
+        st.success("A shared access code is configured.")
+        st.caption(
+            "This code is set in your environment variables (PARENT_ACCESS_CODE) and "
+            "isn't shown here for security — check your .env file or Streamlit Cloud "
+            "secrets if you need a reminder. Give this code to parents so they can "
+            "reach the Create Account screen. It only unlocks the signup form — every "
+            "parent still sets their own unique username and password, so sharing the "
+            "code never gives anyone access to another person's account."
+        )
+        if st.button("Change the code"):
+            st.info(
+                "Update PARENT_ACCESS_CODE in your .env file (local) or Streamlit Cloud "
+                "Secrets, then redeploy. There's no in-app way to change it, by design — "
+                "it keeps the code out of the database entirely."
+            )
+    else:
+        st.error(
+            "No PARENT_ACCESS_CODE is set. Parents won't be able to reach the signup "
+            "form until you add PARENT_ACCESS_CODE to your environment variables."
+        )
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
-    st.markdown("### All Tokens")
+    st.markdown("### Account Overview")
 
-    tokens = list_tokens(shard_id)
-    if not tokens:
-        st.info("No tokens generated yet.")
-        return
+    client = get_shard_client(shard_id, use_service_role=True)
+    resp = (
+        client.table("parent_profiles")
+        .select("account_status")
+        .execute()
+    )
+    rows = resp.data or []
 
-    for t in tokens:
-        cols = st.columns([2, 2, 2, 1])
-        with cols[0]:
-            st.code(t["token"], language=None)
-        with cols[1]:
-            if t.get("redeemed"):
-                st.markdown('<span class="p2p-badge success">Redeemed</span>', unsafe_allow_html=True)
-            elif not t.get("active", True):
-                st.markdown('<span class="p2p-badge warning">Inactive</span>', unsafe_allow_html=True)
-            else:
-                st.markdown('<span class="p2p-badge">Available</span>', unsafe_allow_html=True)
-        with cols[2]:
-            st.caption(f"Created: {t.get('created_at', '')[:10]}")
-        with cols[3]:
-            if t.get("active", True) and not t.get("redeemed"):
-                if st.button("Deactivate", key=f"deactivate_{t['token']}", use_container_width=True):
-                    deactivate_token(t["token"], shard_id)
-                    st.rerun()
+    total = len(rows)
+    active = sum(1 for r in rows if r.get("account_status") == "active")
+    suspended = sum(1 for r in rows if r.get("account_status") == "suspended")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total accounts", total)
+    with col2:
+        st.metric("Active", active)
+    with col3:
+        st.metric("Suspended", suspended)
