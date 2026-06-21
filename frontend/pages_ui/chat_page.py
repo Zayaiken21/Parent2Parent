@@ -3,18 +3,10 @@ import streamlit as st
 from config.age_bands import room_key_for, room_label_for
 from core.chat_backend import send_message, fetch_recent_history, ceo_fetch_all_rooms_recent, ChatError
 from core.moderation import list_open_flags, clear_flag, suspend_user, delete_user
+from styles.avatar_render import avatar_img_html
 
-# A small rotating palette so different senders get visually distinct
-# initial badges without needing to store/fetch a real avatar per
-# message (chat_message_log only keeps a denormalized first-name
-# snapshot, not a live avatar reference — see core/chat_backend.py).
-_INITIAL_COLORS = ["#5B3CC4", "#0F7A70", "#C73838", "#E8A33D", "#3B2680", "#8B6CE0"]
-
-
-def _initial_badge_color(name: str) -> str:
-    if not name:
-        return _INITIAL_COLORS[0]
-    return _INITIAL_COLORS[sum(ord(c) for c in name) % len(_INITIAL_COLORS)]
+REFRESH_SECONDS = 4  # chat has no instant push (see core/chat_backend.py
+# docstring) -- this fragment re-fetches on a short timer instead.
 
 
 def _render_message_list(messages: list[dict]) -> None:
@@ -23,18 +15,16 @@ def _render_message_list(messages: list[dict]) -> None:
         return
     for msg in messages:
         name = msg.get("sender_first_name", "Parent")
-        initial = (name or "P")[0].upper()
-        color = _initial_badge_color(name)
+        avatar_key = msg.get("sender_avatar_key") or "default"
+        avatar_html = avatar_img_html(f"assets/avatars/{avatar_key}.svg", size_px=32)
         st.markdown(
             f"""
             <div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:2px;">
-                <div style="flex-shrink:0; width:30px; height:30px; border-radius:50%;
-                            background:{color}; color:#fff; display:flex; align-items:center;
-                            justify-content:center; font-weight:800; font-size:13px;
-                            box-shadow:0 2px 6px rgba(0,0,0,0.15);">
-                    {initial}
+                <div style="flex-shrink:0; width:32px; height:32px; border-radius:50%;
+                            overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.15);">
+                    {avatar_html}
                 </div>
-                <div class="p2p-chat-bubble" style="border-left-color:{color};">
+                <div class="p2p-chat-bubble">
                     <span class="sender">{name}</span>
                     {msg.get('message_text','')}
                 </div>
@@ -42,6 +32,14 @@ def _render_message_list(messages: list[dict]) -> None:
             """,
             unsafe_allow_html=True,
         )
+
+
+@st.fragment(run_every=REFRESH_SECONDS)
+def _live_chat_fragment(shard_id: str, room_key: str) -> None:
+    history = fetch_recent_history(shard_id, room_key)
+    chat_container = st.container(height=420)
+    with chat_container:
+        _render_message_list(history)
 
 
 def _render_user_chat() -> None:
@@ -59,10 +57,8 @@ def _render_user_chat() -> None:
         unsafe_allow_html=True,
     )
 
-    history = fetch_recent_history(shard_id, room_key)
-    chat_container = st.container(height=420)
-    with chat_container:
-        _render_message_list(history)
+    _live_chat_fragment(shard_id, room_key)
+    st.caption(f"Refreshes automatically every {REFRESH_SECONDS} seconds.")
 
     with st.form("chat_send_form", clear_on_submit=True):
         text = st.text_input("Message", label_visibility="collapsed", placeholder="Type a message...")
@@ -75,6 +71,7 @@ def _render_user_chat() -> None:
                     sender_id=profile["id"],
                     sender_first_name=profile.get("first_name", "Parent"),
                     message_text=text,
+                    sender_avatar_key=profile.get("avatar_key"),
                 )
                 if result["crisis"]:
                     st.warning(result["display_text"])

@@ -18,7 +18,7 @@ from styles.theme import (
     PRIMARY, PRIMARY_DARK, PRIMARY_LIGHT, ACCENT, ACCENT_LIGHT,
     WARM_ACCENT, GOLD_ACCENT, BACKGROUND, CARD_BG, TEXT_DARK, TEXT_MUTED,
     SUCCESS, WARNING, DANGER, GRADIENT_MAIN, GRADIENT_CEO, GRADIENT_PROFILE,
-    GRADIENT_CHAT_BG, GRADIENT_APP_BG, FONT_STACK,
+    GRADIENT_CHAT_BG, FONT_STACK,
 )
 
 
@@ -44,7 +44,14 @@ def get_global_css() -> str:
         font-family: {FONT_STACK} !important;
     }}
     .stApp {{
-        background: {GRADIENT_APP_BG};
+        background: linear-gradient(165deg, #F6F5FB 0%, #EFEAFB 30%, #E6F3F1 65%, #F0EAFB 100%);
+        background-size: 200% 200%;
+        animation: p2pBgDrift 28s ease-in-out infinite;
+    }}
+    @keyframes p2pBgDrift {{
+        0%   {{ background-position: 0% 0%; }}
+        50%  {{ background-position: 100% 60%; }}
+        100% {{ background-position: 0% 0%; }}
     }}
     .block-container {{
         padding-top: 0.6rem;
@@ -464,6 +471,43 @@ def get_global_css() -> str:
         padding: 8px 12px;
         margin-bottom: 6px;
         transition: border-color 0.15s ease;
+    }}
+
+    /* AMBIENT FLOATING DECORATION — subtle movement across the
+       screen, purely decorative, low opacity so it never competes
+       with readability. Fixed position so it drifts behind content
+       regardless of scroll. */
+    .stApp::before, .stApp::after {{
+        content: "";
+        position: fixed;
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 0;
+        filter: blur(2px);
+    }}
+    .stApp::before {{
+        width: 180px;
+        height: 180px;
+        top: 8%;
+        left: -60px;
+        background: radial-gradient(circle, rgba(91,60,196,0.10) 0%, transparent 70%);
+        animation: p2pFloatA 18s ease-in-out infinite;
+    }}
+    .stApp::after {{
+        width: 220px;
+        height: 220px;
+        bottom: 10%;
+        right: -80px;
+        background: radial-gradient(circle, rgba(15,122,112,0.10) 0%, transparent 70%);
+        animation: p2pFloatB 22s ease-in-out infinite;
+    }}
+    @keyframes p2pFloatA {{
+        0%, 100% {{ transform: translate(0, 0); }}
+        50% {{ transform: translate(40px, 60px); }}
+    }}
+    @keyframes p2pFloatB {{
+        0%, 100% {{ transform: translate(0, 0); }}
+        50% {{ transform: translate(-50px, -40px); }}
     }}
 
     /* MOBILE TUNING */
